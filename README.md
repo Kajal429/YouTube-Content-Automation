@@ -1,90 +1,85 @@
-# YouTube-Content-Automation
-An n8n workflow that turns a single Telegram message into a finished, captioned vertical video and publishes it to YouTube Shorts. Send a topic or idea to your bot, and the workflow writes the script, fetches stock footage, renders a 1080x1920 video with text overlay, sends a preview back to Telegram, and uploads it to YouTube with an AI-generated title and description.
+<h1 align="center">🎬 YouTube Content Automation</h1>
 
-Workflow overview
+<p align="center">
+  Send an idea on Telegram → get a ready-to-post YouTube Short.<br>
+  Built with <b>n8n</b>, <b>Gemini</b>, <b>Pixabay</b> and <b>Cloudinary</b>.
+</p>
 
-Features
-Telegram as the control panel: trigger a video by sending a message to your bot.
-AI-written copy: Google Gemini generates the on-video text and, in a second pass, the YouTube title, description and tags.
-Stock footage: pulls a relevant video from the Pixabay API.
-Auto-formatting for Shorts: Cloudinary crops the clip to 1080x1920 (9:16) and burns the text onto it.
-Preview before/while publishing: the finished video is sent back to you on Telegram.
-One-step publishing: uploads directly to YouTube via the YouTube Data API v3.
-How It Works
-Step	Node	What it does
-1	Telegram Trigger	Starts the workflow on every new message to the bot.
-2	AI Agent (Google Gemini Chat Model)	Turns the message into the video text and a stock-footage search keyword.
-3	Code in JavaScript	Parses the agent output into clean fields for the next nodes.
-4	HTTP Request	GET to the Pixabay Videos API to fetch a matching clip.
-5	HTTP Request1	POST to Cloudinary to upload the clip and apply the 1080x1920 crop and text overlay.
-6	Wait	Gives Cloudinary time to finish processing the video.
-7	HTTP Request2	Downloads the processed video as binary data.
-8	Send a video	Sends the result back to the Telegram chat.
-9	AI Agent1 (Google Gemini Chat Model)	Generates the YouTube title, description and tags.
-10	Code in JavaScript1	Parses the metadata into JSON fields.
-11	Merge (combine)	Combines the video binary with the generated metadata.
-12	Upload a video	Publishes the video to YouTube.
-Telegram Trigger -> AI Agent -> Code -> Pixabay -> Cloudinary -> Wait -> Download video
-                                                                            |
-                                          +---------------------------------+------------------+
-                                          |                                                    |
-                                   Send to Telegram                          AI Agent1 -> Code1 -+
-                                                                                                 |
-                                                                  Download video ----------------+-> Merge -> YouTube Upload
-Prerequisites
-An n8n instance (cloud or self-hosted)
-A Telegram bot token from @BotFather
-A Google AI Studio API key for Gemini
-A Pixabay API key
-A Cloudinary account (cloud name and an unsigned upload preset, or API key and secret)
-A Google Cloud project with YouTube Data API v3 enabled and OAuth 2.0 credentials
-Setup
-Import the workflow In n8n, go to Workflows -> Import from file and select workflow.json.
-Create credentials in n8n
-Telegram API (bot token)
-Google Gemini (PaLM) API key
-YouTube OAuth2 API
-Pixabay and Cloudinary keys (set inside the HTTP Request nodes, or as n8n credentials)
-Configure the HTTP nodes
-HTTP Request: add your Pixabay key and search query.
-HTTP Request1: set your Cloudinary cloud name and upload preset.
-Configure the YouTube node
-Title and Description: mapped from the metadata JSON, e.g. {{ $json.video_title }}.
-Category: pick a category (for example People & Blogs or Entertainment).
-Input Binary Field: data.
-Make sure #Shorts is in the title or description.
-Activate the workflow and send a message to your Telegram bot.
-Usage
-Open your bot in Telegram.
-Send a topic or idea, e.g. motivation for developers.
-Wait a minute or two. The bot replies with the generated video.
-The same video is uploaded to your YouTube channel.
-Troubleshooting
+<p align="center">
+  <img src="https://img.shields.io/badge/n8n-workflow-EA4B71?logo=n8n&logoColor=white" alt="n8n">
+  <img src="https://img.shields.io/badge/Google-Gemini-4285F4?logo=google&logoColor=white" alt="Gemini">
+  <img src="https://img.shields.io/badge/YouTube-Shorts-FF0000?logo=youtube&logoColor=white" alt="YouTube">
+  <img src="https://img.shields.io/badge/Telegram-Bot-26A5E4?logo=telegram&logoColor=white" alt="Telegram">
+</p>
 
-Quota exceeded for quota metric 'Video Uploads' YouTube limits uploads per day for each Google Cloud project, and new or unverified projects have a very low limit. Failed attempts count too.
+<p align="center">
+  <img src="./workflow.png" alt="Workflow overview" width="900">
+</p>
 
-Wait for the daily reset (midnight Pacific Time).
-Disable the YouTube node while testing earlier steps.
-Request a quota increase under APIs & Services -> YouTube Data API v3 -> Quotas.
+---
 
-Category field shows "Error fetching options from YouTube" Usually caused by the same quota block, or an expired credential. Reconnect the YouTube credential and retry once the quota resets.
+## ✨ What it does
 
-YouTube node reports missing binary data Check that the Merge node output still contains the Binary tab and that Input Binary Field matches the binary property name (default data).
+You message your Telegram bot a topic. The workflow then:
 
-Cloudinary video not ready Increase the Wait node duration so processing finishes before the download step.
+1. ✍️ Writes the video text and the YouTube title/description using Gemini
+2. 🎞️ Finds a matching stock video on Pixabay
+3. 📱 Converts it to vertical 1080×1920 and adds the text (Cloudinary)
+4. 📩 Sends the finished video back to you on Telegram
+5. 🚀 Uploads it to YouTube as a Short
 
-Upload works but the video isn't a Short Shorts must be vertical, 3 minutes or less, and include #Shorts. The Cloudinary step already outputs 1080x1920.
+## 🔄 Flow
 
-Tech Stack
+```mermaid
+flowchart LR
+    A[Telegram message] --> B[Gemini writes text]
+    B --> C[Pixabay video]
+    C --> D[Cloudinary 9:16 + text]
+    D --> E[Send to Telegram]
+    D --> F[Gemini writes title and description]
+    F --> G[YouTube upload]
+    D --> G
+```
 
-n8n, Telegram Bot API, Google Gemini, Pixabay API, Cloudinary, YouTube Data API v3, JavaScript
+## 🧰 You will need
 
-Roadmap
-[ ] Add voice-over using text-to-speech
-[ ] Add background music
-[ ] Add approval step in Telegram before publishing
-[ ] Error handling and retry for failed uploads
-[ ] Schedule uploads to stay within quota
-Contributing
+| Tool | Used for |
+|------|----------|
+| [n8n](https://n8n.io) | Running the workflow |
+| Telegram bot token ([@BotFather](https://t.me/BotFather)) | Input and preview |
+| [Gemini API key](https://aistudio.google.com/) | Text, title, description |
+| [Pixabay API key](https://pixabay.com/api/docs/) | Stock videos |
+| [Cloudinary](https://cloudinary.com/) account | Resize and text overlay |
+| Google Cloud project with YouTube Data API v3 | Uploading |
 
-Pull requests are welcome. For major changes, open an issue first to discuss what you'd like to change.
+## ⚡ Quick start
+
+1. Import `workflow.json` in n8n (**Workflows → Import from file**).
+2. Add your credentials: Telegram, Gemini, YouTube OAuth2.
+3. Put your Pixabay key in **HTTP Request** and your Cloudinary details in **HTTP Request1**.
+4. In the **YouTube** node, choose a category and keep the binary field as `data`.
+5. Activate the workflow and message your bot, for example: `motivation for developers`.
+
+## 🛠️ Common problems
+
+| Problem | Fix |
+|---------|-----|
+| `Quota exceeded for 'Video Uploads'` | YouTube's daily limit is reached. Wait for the reset (midnight Pacific Time), or request a quota increase in Google Cloud. |
+| Category shows "Error fetching options" | Same quota issue or expired login. Reconnect the YouTube credential. |
+| Missing binary data | Make sure the Merge output has the video and the YouTube node uses `data`. |
+| Video not ready | Increase the **Wait** node time. |
+
+## 🗺️ Roadmap
+
+- [ ] Voice-over with text-to-speech
+- [ ] Background music
+- [ ] Approve on Telegram before publishing
+- [ ] Retry on failed uploads
+
+## 🤝 Contributing
+
+Pull requests are welcome. For big changes, please open an issue first.
+
+---
+
+<p align="center">Made by <a href="https://github.com/your-username">Kajal Khandekar</a></p>
