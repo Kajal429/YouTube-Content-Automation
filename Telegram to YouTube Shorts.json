@@ -1,0 +1,740 @@
+{
+  "name": "Telegram to YouTube Shorts",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "06d36d39-7bc0-40f5-8e47-a6ff0967d91e",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -704,
+        -160
+      ],
+      "webhookId": "49c07afd-65c2-404e-ab1a-1dcf1042da07",
+      "credentials": {
+        "telegramApi": {
+          "id": "jN0Oac4TSR4ymDGG",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analyze this message: {{ $json.message.text }}",
+        "options": {
+          "systemMessage": "You are a backend API processor. You do not speak. You only output raw JSON.\n\nTask: Analyze the user's message and produce:\n1. searchTerm: A single, simple English noun for a video background (e.g., \"nature\", \"city\", \"coding\", \"sky\"). Avoid adjectives.\n2. overlayText: A short summary of the input (max 6 words).\n\nRules:\n- Output RAW JSON ONLY.\n- NO markdown formatting (no ```json).\n- NO intro text (no \"Here is your JSON\").\n- NO nesting keys inside an \"output\" object.\n\nExample Output: { \"searchTerm\": \"ocean\", \"overlayText\": \"Keep moving forward\" }"
+        }
+      },
+      "id": "4d2580af-a66b-4fa7-a1c0-a2a5901ef6ee",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        -416,
+        -160
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.8-flash",
+        "options": {}
+      },
+      "id": "7f8674c1-f5c9-4e3f-af76-bc8d7c79c30f",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        48
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Grab the input data safely\nconst inputData = items[0].json;\n\nlet aiText = null;\n\nif (inputData.message && inputData.message.content) {\n    aiText = inputData.message.content;\n} else if (inputData.text) {\n    aiText = inputData.text;\n} else if (inputData.output) {\n    aiText = inputData.output;\n} else if (typeof inputData === 'string') {\n    aiText = inputData;\n}\n\nif (!aiText) {\n    throw new Error(\"CRITICAL: Could not find the AI text. Check the AI Agent node's Output tab.\");\n}\n\n// Clean markdown fences\nconst cleanJson = aiText.replace(/```json|```/gi, '').trim();\n\ntry {\n    const parsedData = JSON.parse(cleanJson);\n    return [{ json: parsedData }];\n} catch (error) {\n    return [{\n        json: {\n            error: \"JSON Parsing Failed\",\n            reason: error.message,\n            whatWeTriedToParse: cleanJson\n        }\n    }];\n}"
+      },
+      "id": "d5ed88f8-b0d7-4ee6-bc44-d6d1fe4e3b15",
+      "name": "Code in JavaScript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://pixabay.com/api/videos/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpTemplatedCustomAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "per_page",
+              "value": "5"
+            },
+            {
+              "name": "safesearch",
+              "value": "true"
+            },
+            {
+              "name": "q",
+              "value": "={{ $json.searchTerm }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ecf122f3-01c0-4f46-94a1-cecf7e8cc15c",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        112,
+        -160
+      ],
+      "credentials": {
+        "httpTemplatedCustomAuth": {
+          "id": "OpB8wUX0gOrJk0M1",
+          "name": "Pixabay API Key (Kajal K)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.cloudinary.com/v1_1/nvm7fwba/video/upload",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "value": "={{ $('HTTP Request').item.json.hits[0].videos.medium.url }}"
+            },
+            {
+              "name": "upload_preset",
+              "value": "shorts_preset"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bab8a492-7a96-4b7b-98d1-d583db62fc3c",
+      "name": "HTTP Request1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "id": "1efcc0bf-1df7-44e2-8cbb-4d2192e66d0a",
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        544,
+        -160
+      ],
+      "webhookId": "8e895e10-fbd2-4fc3-8402-40183161a478"
+    },
+    {
+      "parameters": {
+        "url": "=https://res.cloudinary.com/nvm7fwba/video/upload/c_fill,w_1080,h_1920/l_text:Arial_60_bold:{{ encodeURIComponent($('Code in JavaScript').item.json.overlayText).replace(/%2C/g, '%252C') }},co_white,w_0.8,c_fit,fl_relative/fl_layer_apply,g_center/{{ $json.public_id }}.mp4",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "0b8eea6b-2130-45aa-9a03-62969a1baae1",
+      "name": "HTTP Request2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        80
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "sendVideo",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "binaryData": true,
+        "additionalFields": {}
+      },
+      "id": "0067c64f-4a1e-4b17-9a77-38680d70971c",
+      "name": "Send a video",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        784,
+        80
+      ],
+      "webhookId": "1b24a63f-d47a-46e2-8a75-60f2932dd73f",
+      "credentials": {
+        "telegramApi": {
+          "id": "jN0Oac4TSR4ymDGG",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=INPUT VIDEO TOPIC: {{ $('Code in JavaScript').item.json.overlayText }}\nBACKGROUND: {{ $('Code in JavaScript').item.json.searchTerm }}",
+        "options": {
+          "systemMessage": "You are a YouTube Shorts SEO Expert and Viral Strategist.\nYour goal is to maximize Click-Through Rate (CTR) and algorithm discoverability.\n\nYOUR TASKS:\n1. **Title:** Write a clickbaity, emotional, or curiosity-inducing title. MUST be under 50 characters. MUST end with #Shorts.\n2. **Description:** Write a 3-line engaging caption followed by 5-8 relevant, high-traffic hashtags.\n3. **Tags:** A comma-separated list of 15 broad and niche keywords for the YouTube algorithm.\n\nRULES:\n- NO generic titles like \"Motivation Video\". Use hooks like \"Stop doing this...\" or \"The Truth About...\"\n- Output valid JSON only. No markdown fences.\n\nOUTPUT JSON STRUCTURE:\n{\n  \"title\": \"String (max 50 chars) #Shorts\",\n  \"description\": \"String (multiline ok)\",\n  \"tags\": \"tag1, tag2, tag3\"\n}"
+        }
+      },
+      "id": "298579e2-2335-42db-aca2-859c6fb4fc58",
+      "name": "AI Agent1",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        224,
+        304
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.8-flash",
+        "options": {}
+      },
+      "id": "cd2ec056-9071-40df-b27b-f3d4bdd732c9",
+      "name": "Google Gemini Chat Model1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        208,
+        528
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputData = items[0].json;\nlet aiText = null;\n\nif (inputData.message && inputData.message.content) {\n    aiText = inputData.message.content; \n} else if (inputData.text) {\n    aiText = inputData.text; \n} else if (inputData.output) {\n    aiText = inputData.output; \n} else if (typeof inputData === 'string') {\n    aiText = inputData;\n}\n\nif (!aiText) {\n    throw new Error(\"CRITICAL: No text found from the Metadata Agent. Check the Input connection.\");\n}\n\nconst cleanJson = aiText.replace(/```json|```/gi, '').trim();\n\n// 4. Parse & Validate\ntry {\n    const data = JSON.parse(cleanJson);\n\n    \n    let finalTags = data.tags;\n    if (Array.isArray(finalTags)) {\n        finalTags = finalTags.join(',');\n    }\n\n    return [{\n        json: {\n            video_title: data.title,\n            video_description: data.description,\n            video_tags: finalTags\n        }\n    }];\n\n} catch (error) {\n    return [{\n        json: {\n            error: \"JSON Parsing Failed\",\n            reason: error.message,\n            raw_ai_output: aiText\n        }\n    }];\n}"
+      },
+      "id": "304df8e2-1053-4a6d-a6d4-ab216eb6c432",
+      "name": "Code in JavaScript1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "dc7a8ada-dd70-41b5-9403-49e0f535efde",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        960,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "video",
+        "operation": "upload",
+        "title": "={{ $json.video_title }}",
+        "regionCode": "IN",
+        "categoryId": "22",
+        "options": {
+          "description": "={{ $json.video_description }}",
+          "privacyStatus": "public",
+          "tags": "={{ $json.video_tags }}"
+        }
+      },
+      "id": "b51135a0-2425-4363-9e10-3d5027ed0e4c",
+      "name": "Upload a video",
+      "type": "n8n-nodes-base.youTube",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        240
+      ],
+      "retryOnFail": false,
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "9A3Zh0UOvs5yRsjQ",
+          "name": "YouTube account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "HTTP Request": [
+      {
+        "json": {
+          "total": 277,
+          "totalHits": 277,
+          "hits": [
+            {
+              "id": 50109,
+              "pageURL": "https://pixabay.com/videos/id-50109/",
+              "type": "film",
+              "tags": "tennis, match, sport, ball, game, trainer, player, athletic, leisure, athlete, training, wimbledon, sports, court, equipment, competition",
+              "duration": 18,
+              "videos": {
+                "large": {
+                  "url": "https://cdn.pixabay.com/video/2020/09/16/50109-459915579_large.mp4",
+                  "width": 3840,
+                  "height": 2160,
+                  "size": 38199528,
+                  "thumbnail": "https://cdn.pixabay.com/video/2020/09/16/50109-459915579_large.jpg"
+                },
+                "medium": {
+                  "url": "https://cdn.pixabay.com/video/2020/09/16/50109-459915579_medium.mp4",
+                  "width": 2560,
+                  "height": 1440,
+                  "size": 16496846,
+                  "thumbnail": "https://cdn.pixabay.com/video/2020/09/16/50109-459915579_medium.jpg"
+                },
+                "small": {
+                  "url": "https://cdn.pixabay.com/video/2020/09/16/50109-459915579_small.mp4",
+                  "width": 1920,
+                  "height": 1080,
+                  "size": 9434448,
+                  "thumbnail": "https://cdn.pixabay.com/video/2020/09/16/50109-459915579_small.jpg"
+                },
+                "tiny": {
+                  "url": "https://cdn.pixabay.com/video/2020/09/16/50109-459915579_tiny.mp4",
+                  "width": 1280,
+                  "height": 720,
+                  "size": 4382763,
+                  "thumbnail": "https://cdn.pixabay.com/video/2020/09/16/50109-459915579_tiny.jpg"
+                }
+              },
+              "views": 58425,
+              "downloads": 24605,
+              "likes": 246,
+              "comments": 14,
+              "user_id": 12531001,
+              "user": "xat-ch",
+              "userImageURL": "https://cdn.pixabay.com/user/2023/10/06/20-02-26-91_250x250.jpg",
+              "noAiTraining": false,
+              "isAiGenerated": false,
+              "isGRated": true,
+              "isLowQuality": false,
+              "userURL": "https://pixabay.com/users/12531001/",
+              "name": "tennis, match, sport",
+              "heading": "",
+              "description": ""
+            },
+            {
+              "id": 52101,
+              "pageURL": "https://pixabay.com/videos/id-52101/",
+              "type": "film",
+              "tags": "boxer, athlete, gloves, box, fighting, mma, boxing, fitness",
+              "duration": 9,
+              "videos": {
+                "large": {
+                  "url": "https://cdn.pixabay.com/video/2020/10/11/52101-467180032_large.mp4",
+                  "width": 4096,
+                  "height": 2160,
+                  "size": 23907739,
+                  "thumbnail": "https://cdn.pixabay.com/video/2020/10/11/52101-467180032_large.jpg"
+                },
+                "medium": {
+                  "url": "https://cdn.pixabay.com/video/2020/10/11/52101-467180032_medium.mp4",
+                  "width": 2732,
+                  "height": 1440,
+                  "size": 13957194,
+                  "thumbnail": "https://cdn.pixabay.com/video/2020/10/11/52101-467180032_medium.jpg"
+                },
+                "small": {
+                  "url": "https://cdn.pixabay.com/video/2020/10/11/52101-467180032_small.mp4",
+                  "width": 2048,
+                  "height": 1080,
+                  "size": 5731882,
+                  "thumbnail": "https://cdn.pixabay.com/video/2020/10/11/52101-467180032_small.jpg"
+                },
+                "tiny": {
+                  "url": "https://cdn.pixabay.com/video/2020/10/11/52101-467180032_tiny.mp4",
+                  "width": 1366,
+                  "height": 720,
+                  "size": 2831603,
+                  "thumbnail": "https://cdn.pixabay.com/video/2020/10/11/52101-467180032_tiny.jpg"
+                }
+              },
+              "views": 41904,
+              "downloads": 22590,
+              "likes": 163,
+              "comments": 21,
+              "user_id": 18665352,
+              "user": "FITAHOLICLIFE",
+              "userImageURL": "",
+              "noAiTraining": false,
+              "isAiGenerated": false,
+              "isGRated": true,
+              "isLowQuality": false,
+              "userURL": "https://pixabay.com/users/18665352/",
+              "name": "boxer, athlete, gloves",
+              "heading": "",
+              "description": ""
+            },
+            {
+              "id": 10809,
+              "pageURL": "https://pixabay.com/videos/id-10809/",
+              "type": "film",
+              "tags": "runner, shore, coast, coastline, jogging, run, sports, active, freedom, beach, healthy, lifestyle, person, training, sport, jogger, fitness, sea, exercise, workout, morning, athlete",
+              "duration": 12,
+              "videos": {
+                "large": {
+                  "url": "https://cdn.pixabay.com/video/2017/07/23/10809-226624946_large.mp4",
+                  "width": 1920,
+                  "height": 1080,
+                  "size": 7727538,
+                  "thumbnail": "https://cdn.pixabay.com/video/2017/07/23/10809-226624946_large.jpg"
+                },
+                "medium": {
+                  "url": "https://cdn.pixabay.com/video/2017/07/23/10809-226624946_medium.mp4",
+                  "width": 1280,
+                  "height": 720,
+                  "size": 3802117,
+                  "thumbnail": "https://cdn.pixabay.com/video/2017/07/23/10809-226624946_medium.jpg"
+                },
+                "small": {
+                  "url": "https://cdn.pixabay.com/video/2017/07/23/10809-226624946_small.mp4",
+                  "width": 960,
+                  "height": 540,
+                  "size": 2216065,
+                  "thumbnail": "https://cdn.pixabay.com/video/2017/07/23/10809-226624946_small.jpg"
+                },
+                "tiny": {
+                  "url": "https://cdn.pixabay.com/video/2017/07/23/10809-226624946_tiny.mp4",
+                  "width": 640,
+                  "height": 360,
+                  "size": 768844,
+                  "thumbnail": "https://cdn.pixabay.com/video/2017/07/23/10809-226624946_tiny.jpg"
+                }
+              },
+              "views": 285808,
+              "downloads": 121717,
+              "likes": 996,
+              "comments": 179,
+              "user_id": 1281706,
+              "user": "Coverr-Free-Footage",
+              "userImageURL": "https://cdn.pixabay.com/user/2015/10/16/09-28-45-303_250x250.png",
+              "noAiTraining": false,
+              "isAiGenerated": false,
+              "isGRated": true,
+              "isLowQuality": false,
+              "userURL": "https://pixabay.com/users/1281706/",
+              "name": "runner, shore, coast",
+              "heading": "",
+              "description": ""
+            },
+            {
+              "id": 110734,
+              "pageURL": "https://pixabay.com/videos/id-110734/",
+              "type": "film",
+              "tags": "skate, sport, water, action, exercise, flying, guy, jump, reflection, underwater, wave, cool, athlete, 3d illustration, floating, dynamic, dramatic, shark, skill, surf, play, hipster, loop, enjoy, diving, live wallpaper",
+              "duration": 14,
+              "videos": {
+                "large": {
+                  "url": "https://cdn.pixabay.com/video/2022/03/14/110734-688648666_large.mp4",
+                  "width": 3840,
+                  "height": 2160,
+                  "size": 42190778,
+                  "thumbnail": "https://cdn.pixabay.com/video/2022/03/14/110734-688648666_large.jpg"
+                },
+                "medium": {
+                  "url": "https://cdn.pixabay.com/video/2022/03/14/110734-688648666_medium.mp4",
+                  "width": 2560,
+                  "height": 1440,
+                  "size": 24469799,
+                  "thumbnail": "https://cdn.pixabay.com/video/2022/03/14/110734-688648666_medium.jpg"
+                },
+                "small": {
+                  "url": "https://cdn.pixabay.com/video/2022/03/14/110734-688648666_small.mp4",
+                  "width": 1920,
+                  "height": 1080,
+                  "size": 10305786,
+                  "thumbnail": "https://cdn.pixabay.com/video/2022/03/14/110734-688648666_small.jpg"
+                },
+                "tiny": {
+                  "url": "https://cdn.pixabay.com/video/2022/03/14/110734-688648666_tiny.mp4",
+                  "width": 1280,
+                  "height": 720,
+                  "size": 5139721,
+                  "thumbnail": "https://cdn.pixabay.com/video/2022/03/14/110734-688648666_tiny.jpg"
+                }
+              },
+              "views": 180640,
+              "downloads": 85653,
+              "likes": 873,
+              "comments": 0,
+              "user_id": 26135500,
+              "user": "JosephSenior",
+              "userImageURL": "",
+              "noAiTraining": false,
+              "isAiGenerated": false,
+              "isGRated": true,
+              "isLowQuality": false,
+              "userURL": "https://pixabay.com/users/26135500/",
+              "name": "skate, sport, water",
+              "heading": "",
+              "description": ""
+            },
+            {
+              "id": 215946,
+              "pageURL": "https://pixabay.com/videos/id-215946/",
+              "type": "film",
+              "tags": "woman, athlete, run, jog, race, sport, athletics",
+              "duration": 5,
+              "videos": {
+                "large": {
+                  "url": "https://cdn.pixabay.com/video/2024/06/09/215946_large.mp4",
+                  "width": 3840,
+                  "height": 2160,
+                  "size": 19947700,
+                  "thumbnail": "https://cdn.pixabay.com/video/2024/06/09/215946_large.jpg"
+                },
+                "medium": {
+                  "url": "https://cdn.pixabay.com/video/2024/06/09/215946_medium.mp4",
+                  "width": 2560,
+                  "height": 1440,
+                  "size": 10639162,
+                  "thumbnail": "https://cdn.pixabay.com/video/2024/06/09/215946_medium.jpg"
+                },
+                "small": {
+                  "url": "https://cdn.pixabay.com/video/2024/06/09/215946_small.mp4",
+                  "width": 1920,
+                  "height": 1080,
+                  "size": 6933739,
+                  "thumbnail": "https://cdn.pixabay.com/video/2024/06/09/215946_small.jpg"
+                },
+                "tiny": {
+                  "url": "https://cdn.pixabay.com/video/2024/06/09/215946_tiny.mp4",
+                  "width": 1280,
+                  "height": 720,
+                  "size": 2478140,
+                  "thumbnail": "https://cdn.pixabay.com/video/2024/06/09/215946_tiny.jpg"
+                }
+              },
+              "views": 25217,
+              "downloads": 13240,
+              "likes": 113,
+              "comments": 15,
+              "user_id": 42189410,
+              "user": "VanzetPictures",
+              "userImageURL": "https://cdn.pixabay.com/user/2024/02/20/14-58-55-941_250x250.jpg",
+              "noAiTraining": true,
+              "isAiGenerated": false,
+              "isGRated": true,
+              "isLowQuality": false,
+              "userURL": "https://pixabay.com/users/42189410/",
+              "name": "woman, athlete, run",
+              "heading": "",
+              "description": ""
+            }
+          ]
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Send a video",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Upload a video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "003a6460-7bb7-40ef-bada-e8c761402443",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4fe2165898860762640572cffe2c91ac537d9bdf93970b54305657bf4293eebd"
+  },
+  "nodeGroups": [],
+  "id": "DjxIguZDLpNtcqAy",
+  "tags": []
+}
